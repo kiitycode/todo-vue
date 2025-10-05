@@ -56,7 +56,24 @@
     z-index:-1;
     }
 
-    /* ========== App panel (shared container) ========== */
+    /* ========== Layout Shell ========== */
+#app{min-height:100vh;}
+.app-shell{
+  min-height:100vh;
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:var(--space-xl);
+}
+@media (max-width:768px){
+  .app-shell{padding:var(--space-lg);}
+}
+@media (max-width:480px){
+  .app-shell{padding:var(--space-md);}
+}
+
+/* ========== App panel (shared container) ========== */
     /* Use this on the central wrapper in layout.tsx (class "app-panel") */
     .app-panel{
     max-width:960px;
@@ -132,6 +149,7 @@
 
     /* ========== Utilities ========== */
     .flex-between{ display:flex; justify-content:space-between; align-items:center; gap:var(--space-md) }
+.page{ display:flex; flex-direction:column; gap:var(--space-md); }
     .text-center{ text-align:center }
     .text-danger{ color:var(--danger); font-size:.85rem; margin-top:var(--space-xs) }
 
@@ -154,7 +172,8 @@
     .app-panel{ padding:var(--space-lg) var(--space-md) }
     h1{ font-size:2rem }
     h2{ font-size:1.5rem }
-    .flex-between{ flex-direction:column; align-items:stretch }
+    .flex-between{ display:flex; justify-content:space-between; align-items:center; gap:var(--space-md) }
+.page{ display:flex; flex-direction:column; gap:var(--space-md); }
     }
     @media (max-width:480px){
     body{ padding:var(--space-sm) }
@@ -162,3 +181,4 @@
     h1{ font-size:1.8rem; margin-bottom:var(--space-md) }
     .btn{ width:100% }
     }
+

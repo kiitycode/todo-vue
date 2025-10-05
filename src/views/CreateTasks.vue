@@ -1,5 +1,5 @@
 <template>
-  <section>
+  <section class="page create-task-page">
     <h1>Create Task</h1>
 
     <form @submit.prevent="onSubmit" class="mt-2">
@@ -28,10 +28,10 @@
         <label>Status</label><br />
         <select v-model="form.status">
           <option value="">-- Select --</option>
-          <option value="TODO">📝 TODO</option>
-          <option value="IN_PROGRESS">🚧 In Progress</option>
-          <option value="DONE">✅ Done</option>
-          <option value="CANCELLED">❌ Cancelled</option>
+          <option value="TODO">TODO</option>
+          <option value="IN_PROGRESS">In Progress</option>
+          <option value="DONE">Done</option>
+          <option value="CANCELLED">Cancelled</option>
         </select>
         <p v-if="errors.status" class="text-danger">{{ errors.status }}</p>
       </div>
@@ -48,9 +48,9 @@
       </div>
 
       <div class="flex-between mt-2">
-        <router-link to="/" class="btn">⬅ Cancel</router-link>
+        <router-link to="/" class="btn">Cancel</router-link>
         <button type="submit" class="btn" :disabled="submitting">
-          {{ submitting ? "Saving..." : "💾 Save" }}
+          {{ submitting ? 'Saving...' : 'Save' }}
         </button>
       </div>
     </form>
@@ -84,8 +84,9 @@ function validate() {
 }
 
 async function onSubmit() {
-  if (!user) {
-    router.push('/login')
+  const currentUser = user.value
+  if (!currentUser?.id) {
+    router.push({ name: 'Login' })
     return
   }
   if (!validate()) return
@@ -99,16 +100,16 @@ async function onSubmit() {
         status: form.status,
         priority: form.priority
       },
-      user.id
+      currentUser.id
     )
 
-    console.log('Task created:', created)
-    router.push({ name: 'Home', state: { refresh: true, highlightTask: created.id } })
+    router.push({ name: 'Home', query: { refresh: Date.now().toString(), highlight: String(created.id) } })
   } catch (err) {
     alert(`Failed to create task: ${err.message}`)
     console.error(err)
   } finally {
     submitting.value = false
-  }git 
+  }
 }
 </script>
+

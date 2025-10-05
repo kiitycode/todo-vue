@@ -1,8 +1,10 @@
-    <template><router-view /></template>
+<template>
+  <div class="app-shell">
+    <div class="app-panel">
+      <router-view />
+    </div>
+  </div>
+</template>
 
-    <script setup></script>
-
-    <style>
-    /* global quick fallback */
-    html,body,#app { height:100%; margin:0; font-family: Inter, system-ui, Arial; }
-    </style>
+<script setup>
+</script>

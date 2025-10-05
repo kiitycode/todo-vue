@@ -1,183 +1,287 @@
-    <template>
-    <main class="container">
-        <!-- User header -->
-        <div class="user-header">
-        <div class="user-greeting">
-            Welcome, <span>{{ user?.username }}</span>
-        </div>
-        <button @click="handleLogout" class="btn logout-btn">
-            Logout
-        </button>
-        </div>
+<template>
+  <main class="container page">
+    <!-- Header -->
+    <div class="user-header">
+      <div class="user-greeting">
+        Welcome, <span>{{ (currentUser && currentUser.username) || 'Guest' }}</span>
+      </div>
+      <button @click="handleLogout" class="btn logout-btn">Logout</button>
+    </div>
 
-        <!-- Main content -->
-        <div class="main-content">
+    <!-- 2-column on desktop, single column on mobile -->
+    <div class="main-grid">
+      <!-- Left: Tasks -->
+      <section class="tasks card">
         <div class="flex-between">
-            <h1>📋 Task List</h1>
-            <router-link to="/create" class="btn">+ New Task</router-link>
+          <h1>Task List</h1>
+          <router-link :to="{ name: 'CreateTask' }" class="btn">+ New Task</router-link>
         </div>
 
-        <!-- Search & Filters -->
-        <div class="mt-2 flex-between">
-            <input
-            type="text"
-            placeholder="Search task name..."
-            v-model="search"
-            style="max-width: 40%"
-            />
-
-            <select v-model="status">
+        <div class="mt-2 flex-between filters">
+          <input type="text" placeholder="Search task name..." v-model="search" class="filter-input" />
+          <select v-model="status">
             <option value="all">All Statuses</option>
-            <option value="TODO">📝 TODO</option>
-            <option value="IN_PROGRESS">🚧 In Progress</option>
-            <option value="DONE">✅ Done</option>
-            <option value="CANCELLED">❌ Cancelled</option>
-            </select>
-
-            <select v-model="priority">
+            <option value="TODO">TODO</option>
+            <option value="IN_PROGRESS">In Progress</option>
+            <option value="DONE">Done</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+          <select v-model="priority">
             <option value="all">All Priorities</option>
-            <option value="LOW">🟢 Low</option>
-            <option value="MEDIUM">🟠 Medium</option>
-            <option value="HIGH">🔴 High</option>
-            </select>
+            <option value="LOW">Low</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="HIGH">High</option>
+          </select>
+          <button type="button" class="btn" @click="reload">Reload</button>
         </div>
 
         <p v-if="loading" class="mt-2">Loading tasks...</p>
         <p v-if="error" class="mt-2 text-danger">{{ error }}</p>
-        <p v-if="!loading && filteredTasks.length === 0" class="mt-2">No tasks found.</p>
+        <p v-if="!loading && !error && filteredTasks.length === 0" class="mt-2">No tasks found.</p>
 
-        <!-- Task List -->
-        <ul class="mt-2">
-            <li v-for="task in currentTasks" :key="task.id" class="card mb-1">
+        <ul class="mt-2 task-list">
+          <li
+            v-for="task in currentTasks"
+            :key="task.id"
+            :class="['card mb-1', { 'card-highlight': isHighlighted(task.id) }]"
+          >
             <div class="flex-between">
-                <div>
+              <div>
                 <strong>{{ task.name }}</strong>
                 <p class="mt-1">
-                    <span>Status: {{ task.status }}</span><br />
-                    <span>Priority: {{ task.priority }}</span>
+                  <span>Status: {{ task.status }}</span><br />
+                  <span>Priority: {{ task.priority }}</span>
                 </p>
-                </div>
-                <router-link :to="`/tasks/${task.id}`" class="btn">View</router-link>
+              </div>
+              <router-link :to="{ name: 'DetailPage', params: { id: task.id } }" class="btn">View</router-link>
             </div>
-            </li>
+          </li>
         </ul>
 
-        <!-- Pagination -->
-        <div class="flex-between mt-2 pagination-controls">
-            <button
-            v-if="currentPage > 1"
-            @click="goToPage(currentPage - 1)"
-            class="btn"
-            >
-            ⬅ Prev
-            </button>
-
-            <button
+        <div class="flex-between mt-2 pagination-controls" v-if="totalPages > 1">
+          <button v-if="currentPage > 1" @click="goToPage(currentPage - 1)" class="btn">Prev</button>
+          <button
             v-for="page in totalPages"
             :key="page"
             @click="goToPage(page)"
             class="btn"
             :disabled="currentPage === page"
-            :style="{
-                background: currentPage === page ? 'var(--accent)' : 'var(--gold)',
-                color: currentPage === page ? 'white' : 'black'
-            }"
-            >
+            :class="{ 'btn-active': currentPage === page }"
+          >
             {{ page }}
-            </button>
-
-            <button
-            v-if="currentPage < totalPages"
-            @click="goToPage(currentPage + 1)"
-            class="btn"
-            >
-            Next ➡
-            </button>
+          </button>
+          <button v-if="currentPage < totalPages" @click="goToPage(currentPage + 1)" class="btn">Next</button>
         </div>
-        </div>
-    </main>
-    </template>
+      </section>
 
-    <script setup>
-    import { ref, computed, onMounted, watch } from "vue";
-    import { useRouter, useRoute } from "vue-router";
-    import { fetchTasks } from "../services/api"; 
-    import { useAuth } from "../composables/useAuth"; // custom composable for auth
+      <!-- Right: Chatbot -->
+      <aside class="chat card">
+        <ChatBot />
+      </aside>
+    </div>
+  </main>
+</template>
 
-    const { user, logout } = useAuth();
-    const router = useRouter();
-    const route = useRoute();
+<script setup>
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import api from '../services/api';
+import { useAuth } from '../composables/useAuth';
+import ChatBot from '../components/ChatBot.vue';
 
-    const tasks = ref([]);
-    const error = ref("");
-    const loading = ref(true);
-    const refreshKey = ref(0);
+const router = useRouter();
+const route = useRoute();
+const { user, logout } = useAuth();
 
-    // Filters
-    const search = ref("");
-    const status = ref("all");
-    const priority = ref("all");
+const tasks = ref([]);
+const error = ref('');
+const loading = ref(false);
 
-    // Pagination
-    const currentPage = ref(1);
-    const tasksPerPage = 10;
+const search = ref('');
+const status = ref('all');
+const priority = ref('all');
 
-    async function loadTasks() {
-    if (!user.value) return;
+const currentPage = ref(1);
+const tasksPerPage = 10;
 
-    try {
-        console.log(`Loading tasks for user ${user.value.id}...`);
-        const data = await fetchTasks(user.value.id);
-        tasks.value = data;
-        error.value = "";
-    } catch (err) {
-        error.value = err.message || "Failed to fetch tasks";
-        tasks.value = [];
-    } finally {
-        loading.value = false;
+const currentUser = computed(() => user.value || null);
+const userId = computed(() => (currentUser.value && currentUser.value.id ? currentUser.value.id : null));
+const searchTerm = computed(() => search.value.trim().toLowerCase());
+
+const highlightTaskId = ref(route.query.highlight ? String(route.query.highlight) : null);
+const clearTimers = [];
+
+function scheduleHighlightClear() {
+  if (typeof window === 'undefined') return;
+  while (clearTimers.length) clearTimeout(clearTimers.pop());
+  if (highlightTaskId.value) {
+    const timer = window.setTimeout(() => {
+      highlightTaskId.value = null;
+    }, 4000);
+    clearTimers.push(timer);
+  }
+}
+
+async function loadTasks() {
+  if (!userId.value) {
+    tasks.value = [];
+    return;
+  }
+  loading.value = true;
+  error.value = '';
+  try {
+    tasks.value = await api.getTasks(userId.value);
+  } catch (err) {
+    error.value = (err && err.message) || 'Failed to fetch tasks';
+    tasks.value = [];
+  } finally {
+    loading.value = false;
+  }
+}
+
+function reload() {
+  loadTasks();
+}
+function goToPage(page) {
+  currentPage.value = page;
+}
+
+function handleLogout() {
+  const uid = userId.value;
+  if (uid) api.clearUserTasks(uid);
+  logout();
+  tasks.value = [];
+  router.replace({ name: 'Login' });
+}
+
+function isHighlighted(id) {
+  return highlightTaskId.value && String(id) === highlightTaskId.value;
+}
+
+function clearQueryKeys(keys) {
+  const next = { ...route.query };
+  let dirty = false;
+  keys.forEach((key) => {
+    if (key in next) {
+      delete next[key];
+      dirty = true;
     }
+  });
+  if (dirty) router.replace({ query: next });
+}
+
+const filteredTasks = computed(() => {
+  const term = searchTerm.value;
+  return tasks.value.filter((task) => {
+    const name = String(task.name || '').toLowerCase();
+    const matchesSearch = !term || name.includes(term);
+    const matchesStatus = status.value === 'all' || task.status === status.value;
+    const matchesPriority = priority.value === 'all' || task.priority === priority.value;
+    return matchesSearch && matchesStatus && matchesPriority;
+  });
+});
+
+const totalPages = computed(() => {
+  const count = Math.ceil(filteredTasks.value.length / tasksPerPage);
+  return count > 0 ? count : 1;
+});
+
+const currentTasks = computed(() => {
+  const indexOfLast = currentPage.value * tasksPerPage;
+  const indexOfFirst = indexOfLast - tasksPerPage;
+  return filteredTasks.value.slice(indexOfFirst, indexOfLast);
+});
+
+onMounted(async () => {
+  await loadTasks();
+  scheduleHighlightClear();
+});
+
+watch(userId, async (newId, oldId) => {
+  if (!newId) {
+    tasks.value = [];
+    return;
+  }
+  if (newId !== oldId) {
+    currentPage.value = 1;
+    await loadTasks();
+  }
+});
+
+watch([search, status, priority], () => {
+  currentPage.value = 1;
+});
+
+watch(filteredTasks, () => {
+  if (currentPage.value > totalPages.value) currentPage.value = 1;
+});
+
+watch(
+  () => route.query.refresh,
+  async (val) => {
+    if (val) {
+      await loadTasks();
+      clearQueryKeys(['refresh']);
     }
+  }
+);
 
-    onMounted(loadTasks);
+watch(
+  () => route.query.highlight,
+  (val) => {
+    highlightTaskId.value = val ? String(val) : null;
+    if (val) clearQueryKeys(['highlight']);
+  }
+);
 
-    // Watch for refresh trigger via router state
-    watch(
-    () => route.query.refresh,
-    (val) => {
-        if (val) {
-        console.log("Refresh triggered from navigation state");
-        refreshKey.value++;
-        loadTasks();
-        }
-    }
-    );
+watch(highlightTaskId, () => {
+  scheduleHighlightClear();
+});
 
-    // Computed filters
-    const filteredTasks = computed(() =>
-    tasks.value.filter((task) => {
-        const matchesSearch = task.name?.toLowerCase().includes(search.value.toLowerCase());
-        const matchesStatus = status.value === "all" || task.status === status.value;
-        const matchesPriority = priority.value === "all" || task.priority === priority.value;
-        return matchesSearch && matchesStatus && matchesPriority;
-    })
-    );
+onUnmounted(() => {
+  if (typeof window === 'undefined') return;
+  while (clearTimers.length) clearTimeout(clearTimers.pop());
+});
+</script>
 
-    const totalPages = computed(() =>
-    Math.ceil(filteredTasks.value.length / tasksPerPage)
-    );
+<style scoped>
+/* Layout */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr;        /* mobile: single column */
+  gap: 1rem;
+  align-items: start;
+}
+@media (min-width: 980px) {
+  .main-grid {
+    grid-template-columns: 1.5fr 1fr; /* desktop: tasks larger, chat smaller */
+  }
+}
 
-    const currentTasks = computed(() => {
-    const indexOfLast = currentPage.value * tasksPerPage;
-    const indexOfFirst = indexOfLast - tasksPerPage;
-    return filteredTasks.value.slice(indexOfFirst, indexOfLast);
-    });
+/* Cards wrap for both panes */
+.card {
+  border: 1px solid black;
+  background: grey;
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
 
-    function goToPage(page) {
-    currentPage.value = page;
-    }
+/* Filters */
+.filters { gap: 0.75rem; flex-wrap: wrap; }
+.filters select, .filters .filter-input { padding: 0.5rem 0.75rem; }
 
-    function handleLogout() {
-    logout();
-    router.push("/login");
-    }
-    </script>
+/* Buttons */
+.btn-active { background: var(--accent, #f9c934); color: #000; }
+
+/* Task list */
+.card-highlight { border: 2px solid var(--accent, #f9c934); background: #fff9e6; transition: background 0.3s ease; }
+.mb-1 { margin-bottom: .75rem; }
+.mt-1 { margin-top: .25rem; }
+.mt-2 { margin-top: .75rem; }
+
+/* Optional spacing for right pane */
+.chat { position: sticky; top: 1rem; }
+@media (max-width: 979px) {
+  .chat { position: static; }
+}
+</style>
